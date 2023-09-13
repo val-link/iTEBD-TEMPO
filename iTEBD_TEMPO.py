@@ -10,7 +10,7 @@ from tqdm import tqdm
 from ncon import ncon  # ncon performs better than np.einsum
 
 
-def iTEBD_apply_gate(gate: np.ndarray, A: np.ndarray, sAB: np.ndarray, B: np.ndarray, sBA: np.ndarray, rank: int, rtol: Optional[float] = 1e-8, ctol: Optional[float] = 1e-13):
+def iTEBD_apply_gate(gate: np.ndarray, A: np.ndarray, sAB: np.ndarray, B: np.ndarray, sBA: np.ndarray, rank: int, rtol: float, ctol: Optional[float] = 1e-13):
     """
     single iTEBD step, scheme adapted from https://www.tensors.net/mps
     :param gate: TEBD gate for A-B link
@@ -65,6 +65,7 @@ class BathCorrelation():
         """
         :param bcf: The bath correlation function.
         """
+
         self.bcf = bcf
 
     def compute_eta(self, n: int, delta: float) -> np.ndarray:
@@ -89,18 +90,19 @@ class BathCorrelation():
 class iTEBD_TEMPO():
     """ A class to compute and approximate the influence functional unsing iTEBD-TEMPO and compute dynamics. """
 
-    def __init__(self, l_vals: np.ndarray, delta: float, bcf: Callable[[float], complex], n_c: int):
+    def __init__(self, s_vals: np.ndarray, delta: float, bcf: Callable[[float], complex], n_c: int):
         """
-        :param l_vals: Real eigenvalues of the system-bath coupling operator.
+        :param s_vals: Real eigenvalues of the system-bath coupling operator.
         :param delta: time step for Trotter splitting.
         :param bcf: Bath correlation function.
         :param n_c: Memory cutoff. Should be chosen large enough.
         """
+
         self.n_c = n_c
         self.n_c_eff = n_c  # this is the effective maximum memory time-step (calculated during iTEBD)
-        self.l_vals = l_vals  # add trivial dimension to recover finite f
-        self.l_dim = self.l_vals.size
-        self.nu_dim = self.l_vals.size ** 2 + 1
+        self.s_vals = s_vals  # add trivial dimension to recover finite f
+        self.l_dim = self.s_vals.size
+        self.nu_dim = self.s_vals.size ** 2 + 1
         self.bcf = BathCorrelation(bcf)
         self.delta = delta
         self.eta = self.bcf.compute_eta(self.n_c, delta)
@@ -108,20 +110,20 @@ class iTEBD_TEMPO():
         self.l_sum = np.empty((self.nu_dim - 1), dtype=np.complex128)
         for nu in range(self.nu_dim - 1):
             i, j = int(nu / self.l_dim), nu % self.l_dim
-            self.l_diff[nu] = self.l_vals[i] - self.l_vals[j]
-            self.l_sum[nu] = self.l_vals[i] + self.l_vals[j]
+            self.l_diff[nu] = self.s_vals[i] - self.s_vals[j]
+            self.l_sum[nu] = self.s_vals[i] + self.s_vals[j]
         self.l_diff = np.pad(self.l_diff, [(0, 1)])
         self.l_sum = np.pad(self.l_sum, [(0, 1)])
         self.kron_delta = np.identity(self.nu_dim)
         self.f = None
         return
 
-    def compute_f(self, rank: int, rtol: Optional[int] = 1e-8):
+    def compute_f(self, rtol: float, rank: Optional[int] = np.inf):
         """
         Compute the infinite influence functional tensor f using iTEBD.
 
-        :param rank: Maximum allowed rank (bond dimension).
         :param rtol: Relative tolerance for svd compression.
+        :param rank: Maximum allowed rank (bond dimension).
         """
 
         A = np.ones((1, self.nu_dim, 1))
@@ -162,8 +164,8 @@ class iTEBD_TEMPO():
             self.f = np.ones((1, self.nu_dim, 1))
 
         # compute f[:,-1,:]^\inf = v_r * v_l^T using Lanczos
-        w, v_r = eigs(self.f[:, -1, :], 1, which='LM')
-        w, v_l = eigs(self.f[:, -1, :].T, 1, which='LM')
+        w, v_r = eigs(self.f[:, -1, :], 1, which='LR')
+        w, v_l = eigs(self.f[:, -1, :].T, 1, which='LR')
         self.v_r = v_r[:, 0]
         self.v_l = v_l[:, 0] / (v_l[:, 0] @ v_r[:, 0])
 
@@ -180,7 +182,7 @@ class iTEBD_TEMPO():
         return val @ self.v_r
 
     def get_exact(self, i_path: np.ndarray) -> complex:
-        """ Computes the exact influence of a single path with indices i_path of l_vals. """
+        """ Computes the exact influence of a single path with indices i_path of s_vals. """
         n = i_path.size
         if n > self.eta.size:
             self.eta = self.bcf.compute_eta(n, self.delta)
@@ -195,29 +197,25 @@ class iTEBD_TEMPO():
         Compute the time evolution for n time steps.
 
         :param h_s: System Hamiltonian in the eigenbasis of the coupling operator.
-        :param rho_0: System initial state.
+        :param rho_0: System initial state in the eigenbasis of the coupling operator.
         :param n: Number of time-steps for the propagation.
         :return: Time evolution of density matrix.
         """
-        assert self.f is not None, "the influence functional has not yet been computed, run self.compute_f first"
-        liu_s_half = np.kron(expm(-1j * h_s * self.delta / 2), expm(1j * h_s * self.delta / 2).T)
-        liu_s = liu_s_half @ liu_s_half
 
-        nu_dim = self.l_dim ** 2
-        u = np.einsum('ab,bc->abc', np.identity(nu_dim), liu_s.T)
-        u_half = np.einsum('ab,bc->abc', np.identity(nu_dim), liu_s_half.T)
+        assert self.f is not None, "the influence functional has not yet been computed, run self.compute_f first"
+
+        liu_s = np.kron(expm(-1j * h_s * self.delta / 2), expm(1j * h_s * self.delta / 2).T)
+        u = np.einsum('ab,bc->abc', liu_s.T, liu_s.T)
 
         rho_t = np.empty((n + 1, self.l_dim, self.l_dim), dtype=np.complex128)
         rho_t[0] = rho_0
 
-        evol_tens_half = ncon([self.f[:, :-1, :], u_half], [[-1, 2, -3], [-2, 2, -4]])
         evol_tens = ncon([self.f[:, :-1, :], u], [[-1, 2, -3], [-2, 2, -4]])
-        tens = ncon([self.v_l, liu_s_half @ rho_0.flatten()], [[-2], [-3]])
+        state = ncon([self.v_l, rho_0.flatten()], [[-2], [-3]])
 
         for i in tqdm(range(n), desc='time evolution running'):
-            tens_ = ncon([tens, evol_tens_half], [[1, 2], [1, 2, -2, -3]])
-            tens = ncon([tens, evol_tens], [[1, 2], [1, 2, -2, -3]])
-            rho_t[i + 1] = ncon([self.v_r, tens_], [[1], [1, -1]]).reshape(rho_0.shape)
+            state = ncon([state, evol_tens], [[1, 2], [1, 2, -2, -3]])
+            rho_t[i + 1] = ncon([self.v_r, state], [[1], [1, -1]]).reshape(rho_0.shape)
         return rho_t
 
     def steadystate(self, h_s: np.ndarray) -> np.ndarray:
@@ -227,11 +225,16 @@ class iTEBD_TEMPO():
         :param h_s: System Hamiltonian in the eigenbasis of the coupling operator.
         :return: Steady state density matrix.
         """
+
         assert self.f is not None, "the influence functional has not yet been computed, run self.compute_f first"
-        liu_s = np.kron(expm(-1j * h_s * self.delta), expm(1j * h_s * self.delta).T)
-        nu_dim = self.l_dim ** 2
-        u = np.einsum('ab,bc->abc', np.identity(nu_dim), liu_s.T)
+
+        liu_s = np.kron(expm(-1j * h_s * self.delta / 2), expm(1j * h_s * self.delta / 2).T)
+        u = np.einsum('ab,bc->abc', liu_s.T, liu_s.T)
+
         evol_tens = ncon([self.f[:, :-1, :], u], [[-1, 1, -3], [-2, 1, -4]])
-        w, v = eigs(evol_tens.reshape([evol_tens.shape[0] * evol_tens.shape[1], evol_tens.shape[2] * evol_tens.shape[3]]).T, 1, which='LM')
-        rho_ss = (self.v_r @ v.reshape([self.v_r.size, nu_dim])).reshape([self.l_dim, self.l_dim])
+
+        w, v = eigs(evol_tens.reshape([evol_tens.shape[0] * evol_tens.shape[1], evol_tens.shape[2] * evol_tens.shape[3]]).T, 1, which='LR')
+
+        rho_ss = (self.v_r @ v.reshape([self.v_r.size, self.l_dim**2])).reshape([self.l_dim, self.l_dim])
+
         return rho_ss / np.trace(rho_ss)
