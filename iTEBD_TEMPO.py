@@ -99,8 +99,8 @@ class iTEBD_TEMPO():
         """
 
         self.n_c = n_c
-        self.n_c_eff = n_c  # this is the effective maximum memory time-step (calculated during iTEBD)
-        self.s_vals = s_vals  # add trivial dimension to recover finite f
+        self.n_c_eff = n_c
+        self.s_vals = s_vals
         self.s_dim = self.s_vals.size
         self.nu_dim = self.s_vals.size ** 2 + 1
         self.bcf = BathCorrelation(bcf)
