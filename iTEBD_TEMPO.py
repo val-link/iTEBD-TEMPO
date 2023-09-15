@@ -101,19 +101,19 @@ class iTEBD_TEMPO():
         self.n_c = n_c
         self.n_c_eff = n_c  # this is the effective maximum memory time-step (calculated during iTEBD)
         self.s_vals = s_vals  # add trivial dimension to recover finite f
-        self.l_dim = self.s_vals.size
+        self.s_dim = self.s_vals.size
         self.nu_dim = self.s_vals.size ** 2 + 1
         self.bcf = BathCorrelation(bcf)
         self.delta = delta
         self.eta = self.bcf.compute_eta(self.n_c, delta)
-        self.l_diff = np.empty((self.nu_dim - 1), dtype=np.complex128)
-        self.l_sum = np.empty((self.nu_dim - 1), dtype=np.complex128)
+        self.s_diff = np.empty((self.nu_dim - 1), dtype=np.complex128)
+        self.s_sum = np.empty((self.nu_dim - 1), dtype=np.complex128)
         for nu in range(self.nu_dim - 1):
-            i, j = int(nu / self.l_dim), nu % self.l_dim
-            self.l_diff[nu] = self.s_vals[i] - self.s_vals[j]
-            self.l_sum[nu] = self.s_vals[i] + self.s_vals[j]
-        self.l_diff = np.pad(self.l_diff, [(0, 1)])
-        self.l_sum = np.pad(self.l_sum, [(0, 1)])
+            i, j = int(nu / self.s_dim), nu % self.s_dim
+            self.s_diff[nu] = self.s_vals[i] - self.s_vals[j]
+            self.s_sum[nu] = self.s_vals[i] + self.s_vals[j]
+        self.s_diff = np.pad(self.s_diff, [(0, 1)])
+        self.s_sum = np.pad(self.s_sum, [(0, 1)])
         self.kron_delta = np.identity(self.nu_dim)
         self.f = None
         return
@@ -133,7 +133,7 @@ class iTEBD_TEMPO():
         rank_is_one = True
 
         for k in tqdm(range(1, self.n_c + 1), desc='building influence functional'):
-            i_tens = np.exp(-self.eta[self.n_c - k].real * np.outer(self.l_diff, self.l_diff) - 1j * self.eta[self.n_c - k].imag * np.outer(self.l_sum, self.l_diff))
+            i_tens = np.exp(-self.eta[self.n_c - k].real * np.outer(self.s_diff, self.s_diff) - 1j * self.eta[self.n_c - k].imag * np.outer(self.s_sum, self.s_diff))
 
             if k == self.n_c:
                 gate = np.einsum('a,ij,jb,j->jabi', np.ones((1)), self.kron_delta, self.kron_delta, np.diagonal(i_tens))
@@ -186,11 +186,11 @@ class iTEBD_TEMPO():
         n = i_path.size
         if n > self.eta.size:
             self.eta = self.bcf.compute_eta(n, self.delta)
-        l_diff_path = [self.l_diff[i] for i in np.flip(i_path)]
-        l_sum_path = [self.l_sum[i] for i in np.flip(i_path)]
+        s_diff_path = [self.s_diff[i] for i in np.flip(i_path)]
+        l_sum_path = [self.s_sum[i] for i in np.flip(i_path)]
         are = np.concatenate((np.flip(self.eta[:n].real), np.zeros(n)))
         aim = np.concatenate((np.flip(self.eta[:n].imag), np.zeros(n)))
-        return np.exp(-np.dot(l_diff_path, np.convolve(are, l_diff_path, 'valid')[:n]) - 1j * np.dot(l_diff_path, np.convolve(aim, l_sum_path, 'valid')[:n]))
+        return np.exp(-np.dot(s_diff_path, np.convolve(are, s_diff_path, 'valid')[:n]) - 1j * np.dot(s_diff_path, np.convolve(aim, l_sum_path, 'valid')[:n]))
 
     def evolve(self, h_s: np.ndarray, rho_0: np.ndarray, n: int) -> np.ndarray:
         """
@@ -207,7 +207,7 @@ class iTEBD_TEMPO():
         liu_s = np.kron(expm(-1j * h_s * self.delta / 2), expm(1j * h_s * self.delta / 2).T)
         u = np.einsum('ab,bc->abc', liu_s.T, liu_s.T)
 
-        rho_t = np.empty((n + 1, self.l_dim, self.l_dim), dtype=np.complex128)
+        rho_t = np.empty((n + 1, self.s_dim, self.s_dim), dtype=np.complex128)
         rho_t[0] = rho_0
 
         evol_tens = ncon([self.f[:, :-1, :], u], [[-1, 2, -3], [-2, 2, -4]])
@@ -235,6 +235,6 @@ class iTEBD_TEMPO():
 
         w, v = eigs(evol_tens.reshape([evol_tens.shape[0] * evol_tens.shape[1], evol_tens.shape[2] * evol_tens.shape[3]]).T, 1, which='LR')
 
-        rho_ss = (self.v_r @ v.reshape([self.v_r.size, self.l_dim**2])).reshape([self.l_dim, self.l_dim])
+        rho_ss = (self.v_r @ v.reshape([self.v_r.size, self.s_dim**2])).reshape([self.s_dim, self.s_dim])
 
         return rho_ss / np.trace(rho_ss)

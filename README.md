@@ -12,7 +12,6 @@ where $H_S$ is the system Hamiltonian, $S$ is a diagonal Hermitian coupling oper
 $$\text{BCF}(t-s)=\text{tr}_E[ \rho_E(0)B(t)B(s)] .$$
 The following inputs are required. The bath correlation function $\text{BCF}(t)$, the time step $\Delta$ used for the Trotter splitting, the bath memory time step $N_c$ (must be chosen large enough) and the eigenvalues (diagonal elements) of $S$.
 
-    >>> from iTEBD_TEMPO import iTEBD_TEMPO
     >>> MyiTEBD_TEMPO = iTEBD_TEMPO(np.diagonal(S), Delta, BCF, N_c)
 
 To computing an open system problem, two steps are required. First the influence functional has to be contracted to tensor train form using iTEBD with SVD compression at a given tolerance. Decreasing the tolerance will yield a more accurate representation. This is the computationally demanding step.
