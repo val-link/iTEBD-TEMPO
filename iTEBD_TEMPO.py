@@ -173,16 +173,25 @@ class iTEBD_TEMPO():
         return
 
     def get(self, i_path: np.ndarray) -> complex:
-        """ Computes the influence of a single path with indices i_path """
+        """ Computes the influence of a single path with indices i_path.
+
+        :param i_path: Array of indices at which the generated influence functional should be evaluated.
+        :return: Value of the influence functional along the path.
+        """
         assert self.f is not None, "the influence functional has not yet been computed, run self.compute_f first"
-        assert type(i_path[0]) is np.int32, "i_path must be an integer numpy array of size self.n"
+        assert type(i_path[0]) is np.int32, "i_path must be an integer numpy array"
         val = 1. * self.v_l
         for i in range(i_path.size):
             val = val @ self.f[:, i_path[i], :]
         return val @ self.v_r
 
     def get_exact(self, i_path: np.ndarray) -> complex:
-        """ Computes the exact influence of a single path with indices i_path of s_vals. """
+        """ Computes the exact influence of a single path with indices i_path. 
+        
+        :param i_path: Array of indices at which the influence functional should be evaluated.
+        :return: Exact value of the influence functional along the path.
+        """
+        assert type(i_path[0]) is np.int32, "i_path must be an integer numpy array"
         n = i_path.size
         if n > self.eta.size:
             self.eta = self.bcf.compute_eta(n, self.delta)
