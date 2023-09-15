@@ -187,10 +187,10 @@ class iTEBD_TEMPO():
         if n > self.eta.size:
             self.eta = self.bcf.compute_eta(n, self.delta)
         s_diff_path = [self.s_diff[i] for i in np.flip(i_path)]
-        l_sum_path = [self.s_sum[i] for i in np.flip(i_path)]
+        s_sum_path = [self.s_sum[i] for i in np.flip(i_path)]
         are = np.concatenate((np.flip(self.eta[:n].real), np.zeros(n)))
         aim = np.concatenate((np.flip(self.eta[:n].imag), np.zeros(n)))
-        return np.exp(-np.dot(s_diff_path, np.convolve(are, s_diff_path, 'valid')[:n]) - 1j * np.dot(s_diff_path, np.convolve(aim, l_sum_path, 'valid')[:n]))
+        return np.exp(-np.dot(s_diff_path, np.convolve(are, s_diff_path, 'valid')[:n]) - 1j * np.dot(s_diff_path, np.convolve(aim, s_sum_path, 'valid')[:n]))
 
     def evolve(self, h_s: np.ndarray, rho_0: np.ndarray, n: int) -> np.ndarray:
         """
