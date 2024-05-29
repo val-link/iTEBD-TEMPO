@@ -1,5 +1,5 @@
 # iTEBD-TEMPO
-An implementation of the open quantum system algorithm introduced in Ref. https://arxiv.org/abs/2307.01802. It uses a representation of <strong>open quantum system dynamics</strong> in terms of infinite tensor networks. Specifically, the time-discrete influence functional is generated in a periodic tensor train form using infinite time evolving block decimation (iTEBD). This object can then be used to compute dynamics and steady states for open quantum systems <strong>with arbitrary stationary Gaussian baths </strong> (arbitrary stationary bath correlation function). Both Julia and Python implementations are available.
+An implementation of the open quantum system algorithm introduced in Ref. PhysRevLett.132.200403. It uses a representation of <strong>open quantum system dynamics</strong> in terms of infinite tensor networks. Specifically, the time-discrete influence functional is generated in a periodic tensor train form using infinite time evolving block decimation (iTEBD). This object can then be used to compute dynamics and steady states for open quantum systems <strong>with arbitrary stationary Gaussian baths </strong> (arbitrary stationary bath correlation function). Both Julia and Python implementations are available.
 
 # Examples
 
@@ -35,4 +35,4 @@ For a full example and test, consider cheking out the example notebook provided 
 
 
 # Citing
-Please cite the corresponding preprint https://arxiv.org/abs/2307.01802.
+Please cite the corresponding publication https://doi.org/10.1103/PhysRevLett.132.200403.
